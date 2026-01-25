@@ -9,19 +9,20 @@ from tqdm import tqdm
 
 class GenomeEmbedder:
     """
-    Convert genome sequences to fixed-dimensional vectors using k-mer embeddings.
+    Convert genome sequences to fixed-dimensional vectors using whole-sequence embeddings.
     Suitable for ANN/KNN search across large genome databases.
     """
     
-    def __init__(self, model_name="zhihan1996/DNA_bert_3", k=6, stride=3, device=None):
+    def __init__(self, model_name="zhihan1996/DNA_bert_3", k=3, stride=1, device=None, use_whole_sequence=True):
         """
         Initialize the genome embedder.
         
         Args:
             model_name: HuggingFace model for DNA embeddings
-            k: K-mer size (default 6)
-            stride: Step size for k-mer extraction (default 3, non-overlapping would be k)
+            k: K-mer size (default 3) - MUST match model vocabulary (DNA-BERT uses 3-mers)
+            stride: Step size for k-mer extraction (default 1 for overlapping k-mers)
             device: torch device (cuda/cpu), auto-detected if None
+            use_whole_sequence: If True, embed entire sequence (recommended). If False, use old k-mer averaging.
         """
         print(f"Loading DNA-BERT model: {model_name}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -29,6 +30,7 @@ class GenomeEmbedder:
         
         self.k = k
         self.stride = stride
+        self.use_whole_sequence = use_whole_sequence
         
         # Set device
         if device is None:
@@ -40,6 +42,7 @@ class GenomeEmbedder:
         self.model.eval()
         
         print(f"Model loaded on {self.device}")
+        print(f"Embedding mode: {'WHOLE SEQUENCE' if use_whole_sequence else 'K-mer averaging'}")
         print(f"K-mer size: {k}, Stride: {stride}")
     
     def clean_sequence(self, sequence: str) -> str:
@@ -136,7 +139,9 @@ class GenomeEmbedder:
     def sequence_to_vector(self, sequence: str, normalize=True) -> np.ndarray:
         """
         Convert a genome sequence to a single fixed-dimensional vector.
-        Strategy: Extract k-mers -> Embed each -> Average embeddings
+        
+        Strategy (use_whole_sequence=True): Tokenize entire sequence -> Mean pool all token embeddings
+        Strategy (use_whole_sequence=False): Extract k-mers -> Embed each -> Average embeddings
         
         Args:
             sequence: DNA sequence string
@@ -144,6 +149,75 @@ class GenomeEmbedder:
             
         Returns:
             Fixed-dimensional embedding vector
+        """
+        if self.use_whole_sequence:
+            return self._embed_whole_sequence(sequence, normalize)
+        else:
+            return self._embed_kmers_averaged(sequence, normalize)
+    
+    def _embed_whole_sequence(self, sequence: str, normalize=True) -> np.ndarray:
+        """
+        Embed entire sequence at once using DNA-BERT.
+        This preserves positional information and sequence context.
+        """
+        sequence = self.clean_sequence(sequence)
+        
+        # DNA-BERT requires k-mer formatted input (space-separated k-mers)
+        # Convert sequence to k-mer string
+        kmers = []
+        valid_bases = set('ACGT')
+        for i in range(0, len(sequence) - self.k + 1, self.stride):
+            kmer = sequence[i:i + self.k]
+            # Only include k-mers with valid DNA bases
+            if all(base in valid_bases for base in kmer):
+                kmers.append(kmer)
+        
+        if not kmers:
+            # Return zero vector if no valid k-mers
+            return np.zeros(768)
+        
+        # Join k-mers with spaces (DNA-BERT format)
+        kmer_sequence = ' '.join(kmers)
+        
+        # Tokenize the k-mer sequence
+        tokens = self.tokenizer(
+            kmer_sequence,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,  # BERT models typically have max length
+            padding=False
+        ).to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model.bert(**tokens)
+        
+        # Get all token embeddings (not just CLS)
+        # Shape: (1, seq_len, hidden_dim)
+        token_embeddings = outputs.last_hidden_state
+        
+        # Mean pooling over all tokens (excluding padding if any)
+        # This preserves information from the entire sequence
+        if 'attention_mask' in tokens:
+            mask = tokens['attention_mask'].unsqueeze(-1).float()
+            masked_embeddings = token_embeddings * mask
+            sum_embeddings = masked_embeddings.sum(dim=1)
+            sum_mask = mask.sum(dim=1)
+            avg_embedding = (sum_embeddings / sum_mask).cpu().numpy().squeeze()
+        else:
+            avg_embedding = token_embeddings.mean(dim=1).cpu().numpy().squeeze()
+        
+        # Normalize if requested
+        if normalize:
+            norm = np.linalg.norm(avg_embedding)
+            if norm > 0:
+                avg_embedding = avg_embedding / norm
+        
+        return avg_embedding
+    
+    def _embed_kmers_averaged(self, sequence: str, normalize=True) -> np.ndarray:
+        """
+        OLD METHOD: Extract k-mers -> Embed each -> Average embeddings.
+        This loses positional information.
         """
         # Extract k-mers
         kmers = self.extract_kmers(sequence)
