@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genome Sequence Comparison - Matrix Style</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Step 1: Sequence Selection Screen -->
+    <div id="selection-screen" class="screen active">
+        <div class="matrix-container">
+            <div class="title">SELECT SEQUENCE</div>
+            <div id="sequence-cards" class="sequence-cards"></div>
+            <div id="selection-panel" class="selection-panel hidden">
+                <div class="selected-sequence">Selected: <span id="selected-id"></span></div>
+                <input type="number" id="k-value" placeholder="Enter K value" min="1" max="50" value="10">
+                <button id="compare-btn">COMPARE ALGORITHMS</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Comparison Screen -->
+    <div id="comparison-screen" class="screen">
+        <div class="comparison-container">
+            <div class="comparison-sides">
+                <div class="algorithm-side">
+                    <div class="algorithm-title">VECTOR KNN</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="vector-progress"></div>
+                        <div class="progress-time" id="vector-time">0.00s</div>
+                    </div>
+                    <div class="status" id="vector-status">Ready...</div>
+                </div>
+                
+                <div class="algorithm-side">
+                    <div class="algorithm-title">NEEDLEMAN-WUNSCH</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="nw-progress"></div>
+                        <div class="progress-time" id="nw-time">0.00s</div>
+                    </div>
+                    <div class="status" id="nw-status">Ready...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Results Screen -->
+    <div id="results-screen" class="screen">
+        <div class="results-container">
+            <div class="query-sequence">
+                <div class="sequence-title">QUERY SEQUENCE</div>
+                <div class="sequence-id" id="query-id"></div>
+                <div class="sequence-data" id="query-sequence-data"></div>
+            </div>
+            
+            <div class="results-comparison">
+                <div class="results-side">
+                    <div class="results-title">VECTOR KNN RESULTS</div>
+                    <div class="results-runtime" id="vector-runtime">Runtime: --</div>
+                    <div id="vector-results" class="results-list"></div>
+                </div>
+                
+                <div class="results-side">
+                    <div class="results-title">NEEDLEMAN-WUNSCH RESULTS</div>
+                    <div class="results-runtime" id="nw-runtime">Runtime: --</div>
+                    <div id="nw-results" class="results-list"></div>
+                </div>
+            </div>
+        </div>
+        
+        <button id="restart-btn" class="restart-btn">RESTART</button>
+    </div>
+
+    <script src="algorithms.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
