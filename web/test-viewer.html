@@ -8,6 +8,8 @@
 </head>
 <body>
     <div class="screen active">
+        <a href="menu.html" class="back-btn-top-left">← BACK TO MENU</a>
+        
         <div class="matrix-container">
             <div class="title">TEST RESULTS VIEWER</div>
             
@@ -29,15 +31,53 @@
                         <div>Sequences Tested: <span id="viewer-num-sequences">-</span></div>
                         <div>K Value: <span id="viewer-k-value">-</span></div>
                         <div>Timestamp: <span id="viewer-timestamp">-</span></div>
+                        <div>Average Agreement: <span id="viewer-avg-agreement">-</span></div>
                     </div>
                 </div>
                 
-                <div class="viewer-content">
+                <!-- Agreement Distribution Chart -->
+                <div id="distribution-section" class="distribution-section hidden">
+                    <div class="section-title">AGREEMENT DISTRIBUTION</div>
+                    <div id="viewer-distribution-bars" class="distribution-bars"></div>
+                </div>
+                
+                <!-- Runtime Comparison Chart -->
+                <div id="runtime-section" class="distribution-section hidden">
+                    <div class="section-title">AVERAGE RUNTIME COMPARISON</div>
+                    <div id="runtime-comparison-chart" class="runtime-comparison-chart"></div>
+                </div>
+                
+                <!-- Individual Results -->
+                <div id="viewer-content" class="viewer-content hidden">
+                    <div class="section-title">INDIVIDUAL TEST RESULTS</div>
                     <div id="viewer-sequence-list" class="viewer-sequence-list"></div>
                 </div>
             </div>
             
-            <a href="menu.html" class="back-btn">BACK TO MENU</a>
+            <!-- Detail View for Individual Test Result -->
+            <div id="test-detail-view" class="test-detail-view hidden">
+                <button id="back-to-list-btn" class="back-btn">← BACK TO LIST</button>
+                
+                <div class="detail-header">
+                    <div class="detail-title">TEST RESULT DETAIL</div>
+                    <div class="detail-sequence-id" id="detail-sequence-id"></div>
+                    <div class="detail-agreement" id="detail-agreement"></div>
+                </div>
+                
+                <div class="detail-comparison">
+                    <div class="detail-column">
+                        <div class="detail-column-title">VECTOR KNN RESULTS</div>
+                        <div class="detail-runtime" id="detail-vec-runtime"></div>
+                        <div id="detail-vec-results" class="detail-results-list"></div>
+                    </div>
+                    
+                    <div class="detail-column">
+                        <div class="detail-column-title">NEEDLEMAN-WUNSCH RESULTS</div>
+                        <div class="detail-runtime" id="detail-nw-runtime"></div>
+                        <div id="detail-nw-results" class="detail-results-list"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -98,29 +138,163 @@
                 });
         }
         
+        let currentTestData = null;
+        let sequenceData = null;
+        
+        // Load sequence data for alignments
+        fetch('http://localhost:5000/api/sequences')
+            .then(response => response.json())
+            .then(data => {
+                sequenceData = data;
+                console.log('Loaded sequence data for alignments');
+            })
+            .catch(error => console.error('Error loading sequence data:', error));
+        
         function displayTestResults(data) {
-            // Show results section
+            currentTestData = data;
+            
+            // Show results section and hide file selection
             document.getElementById('file-selection').style.display = 'none';
             document.getElementById('viewer-results').classList.remove('hidden');
+            
+            // Show distribution, runtime, and content sections
+            document.getElementById('distribution-section').classList.remove('hidden');
+            document.getElementById('runtime-section').classList.remove('hidden');
+            document.getElementById('viewer-content').classList.remove('hidden');
+            
+            // Calculate agreement percentages and runtimes for all sequences
+            const agreementPercentages = [];
+            let totalVecRuntime = 0;
+            let totalNwRuntime = 0;
+            for (const [seqId, results] of Object.entries(data.seqs)) {
+                const vecIds = new Set(results.vec_knn.returned_knn.map(r => r.id));
+                const nwIds = new Set(results.nw_knn.returned_knn.map(r => r.id));
+                const agreement = [...vecIds].filter(id => nwIds.has(id)).length;
+                const agreementPercent = (agreement / data.header.requested_knn * 100);
+                agreementPercentages.push(agreementPercent);
+                
+                // Accumulate runtimes
+                totalVecRuntime += results.vec_knn.runtime;
+                totalNwRuntime += results.nw_knn.runtime;
+            }
+            
+            // Calculate average agreement
+            const avgAgreement = agreementPercentages.reduce((a, b) => a + b, 0) / agreementPercentages.length;
             
             // Display header info
             document.getElementById('viewer-num-sequences').textContent = data.header.num_sequences;
             document.getElementById('viewer-k-value').textContent = data.header.requested_knn;
             document.getElementById('viewer-timestamp').textContent = new Date(data.header.timestamp).toLocaleString();
+            document.getElementById('viewer-avg-agreement').textContent = avgAgreement.toFixed(1) + '%';
+            
+            // Create distribution chart (10 buckets: 0-10%, 10-20%, ..., 90-100%)
+            const distribution = Array(10).fill(0);
+            agreementPercentages.forEach(percent => {
+                // Handle 100% specially - put it in the last bucket (90-100%)
+                const bucket = percent >= 100 ? 9 : Math.floor(percent / 10);
+                distribution[bucket]++;
+            });
+            
+            const maxCount = Math.max(...distribution);
+            const barsContainer = document.getElementById('viewer-distribution-bars');
+            barsContainer.innerHTML = '';
+            
+            distribution.forEach((count, i) => {
+                const barContainer = document.createElement('div');
+                barContainer.className = 'bar-container';
+                
+                const barCount = document.createElement('div');
+                barCount.className = 'bar-count';
+                barCount.textContent = count;
+                
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                const heightPx = maxCount > 0 ? (count / maxCount) * 180 : 0;
+                bar.style.height = heightPx + 'px';
+                bar.style.minHeight = count > 0 ? '5px' : '0px';
+                
+                const barLabel = document.createElement('div');
+                barLabel.className = 'bar-label';
+                barLabel.textContent = `${i * 10}-${(i + 1) * 10}%`;
+                
+                barContainer.appendChild(barCount);
+                barContainer.appendChild(bar);
+                barContainer.appendChild(barLabel);
+                barsContainer.appendChild(barContainer);
+            });
+            
+            // Create runtime comparison chart
+            const avgVecRuntime = totalVecRuntime / data.header.num_sequences;
+            const avgNwRuntime = totalNwRuntime / data.header.num_sequences;
+            const maxRuntime = Math.max(avgVecRuntime, avgNwRuntime);
+            
+            const runtimeChartContainer = document.getElementById('runtime-comparison-chart');
+            runtimeChartContainer.innerHTML = '';
+            
+            // Vector KNN bar
+            const vecRuntimeBar = document.createElement('div');
+            vecRuntimeBar.className = 'runtime-bar-container';
+            
+            const vecLabel = document.createElement('div');
+            vecLabel.className = 'runtime-label';
+            vecLabel.textContent = 'Vector KNN';
+            
+            const vecBarWrapper = document.createElement('div');
+            vecBarWrapper.className = 'runtime-bar-wrapper';
+            
+            const vecBar = document.createElement('div');
+            vecBar.className = 'runtime-bar vec-bar';
+            const vecHeightPx = maxRuntime > 0 ? (avgVecRuntime / maxRuntime) * 200 : 0;
+            vecBar.style.height = vecHeightPx + 'px';
+            
+            const vecTime = document.createElement('div');
+            vecTime.className = 'runtime-time';
+            vecTime.textContent = avgVecRuntime.toFixed(3) + 's';
+            
+            vecBarWrapper.appendChild(vecBar);
+            vecRuntimeBar.appendChild(vecLabel);
+            vecRuntimeBar.appendChild(vecBarWrapper);
+            vecRuntimeBar.appendChild(vecTime);
+            
+            // Needleman-Wunsch bar
+            const nwRuntimeBar = document.createElement('div');
+            nwRuntimeBar.className = 'runtime-bar-container';
+            
+            const nwLabel = document.createElement('div');
+            nwLabel.className = 'runtime-label';
+            nwLabel.textContent = 'Needleman-Wunsch';
+            
+            const nwBarWrapper = document.createElement('div');
+            nwBarWrapper.className = 'runtime-bar-wrapper';
+            
+            const nwBar = document.createElement('div');
+            nwBar.className = 'runtime-bar nw-bar';
+            const nwHeightPx = maxRuntime > 0 ? (avgNwRuntime / maxRuntime) * 200 : 0;
+            nwBar.style.height = nwHeightPx + 'px';
+            
+            const nwTime = document.createElement('div');
+            nwTime.className = 'runtime-time';
+            nwTime.textContent = avgNwRuntime.toFixed(3) + 's';
+            
+            nwBarWrapper.appendChild(nwBar);
+            nwRuntimeBar.appendChild(nwLabel);
+            nwRuntimeBar.appendChild(nwBarWrapper);
+            nwRuntimeBar.appendChild(nwTime);
+            
+            runtimeChartContainer.appendChild(vecRuntimeBar);
+            runtimeChartContainer.appendChild(nwRuntimeBar);
             
             // Display sequence results
             const listContainer = document.getElementById('viewer-sequence-list');
             listContainer.innerHTML = '';
             
+            let index = 0;
             for (const [seqId, results] of Object.entries(data.seqs)) {
                 const seqCard = document.createElement('div');
                 seqCard.className = 'viewer-sequence-card';
+                seqCard.style.cursor = 'pointer';
                 
-                // Calculate agreement
-                const vecIds = new Set(results.vec_knn.returned_knn.map(r => r.id));
-                const nwIds = new Set(results.nw_knn.returned_knn.map(r => r.id));
-                const agreement = [...vecIds].filter(id => nwIds.has(id)).length;
-                const agreementPercent = (agreement / data.header.requested_knn * 100).toFixed(1);
+                const agreementPercent = agreementPercentages[index++].toFixed(1);
                 
                 seqCard.innerHTML = `
                     <div class="viewer-seq-header">
@@ -135,9 +309,106 @@
                     </div>
                 `;
                 
+                // Add click handler to show detail view
+                seqCard.addEventListener('click', () => {
+                    showDetailView(seqId, results, agreementPercent);
+                });
+                
                 listContainer.appendChild(seqCard);
             }
         }
+        
+        function showDetailView(seqId, results, agreementPercent) {
+            // Hide list view, show detail view
+            document.getElementById('viewer-results').classList.add('hidden');
+            document.getElementById('test-detail-view').classList.remove('hidden');
+            
+            // Display header info
+            document.getElementById('detail-sequence-id').textContent = `Query Sequence: ${seqId}`;
+            document.getElementById('detail-agreement').textContent = `Agreement: ${agreementPercent}%`;
+            document.getElementById('detail-vec-runtime').textContent = `Runtime: ${results.vec_knn.runtime.toFixed(3)}s`;
+            document.getElementById('detail-nw-runtime').textContent = `Runtime: ${results.nw_knn.runtime.toFixed(3)}s`;
+            
+            // Display Vector KNN results with expandable alignments
+            const vecContainer = document.getElementById('detail-vec-results');
+            vecContainer.innerHTML = '';
+            results.vec_knn.returned_knn.forEach((result, idx) => {
+                const item = createDetailResultItem(seqId, result, idx + 1, 'vector');
+                vecContainer.appendChild(item);
+            });
+            
+            // Display NW results with expandable alignments
+            const nwContainer = document.getElementById('detail-nw-results');
+            nwContainer.innerHTML = '';
+            results.nw_knn.returned_knn.forEach((result, idx) => {
+                const item = createDetailResultItem(seqId, result, idx + 1, 'nw');
+                nwContainer.appendChild(item);
+            });
+        }
+        
+        function createDetailResultItem(queryId, result, rank, algorithmType) {
+            const item = document.createElement('div');
+            item.className = 'detail-result-item';
+            
+            const uniqueQueryId = `${algorithmType}-detail-query-${result.id}`;
+            const uniqueComparedId = `${algorithmType}-detail-compared-${result.id}`;
+            
+            item.innerHTML = `
+                <div class="detail-result-header">
+                    <span class="detail-result-rank">#${rank}</span>
+                    <span class="detail-result-id">${result.id}</span>
+                    <span class="detail-result-similarity">${result.similarity.toFixed(4)}</span>
+                    <span class="detail-expand-icon">▼</span>
+                </div>
+                <div class="detail-result-details" style="display: none;">
+                    <div class="sequence-comparison">
+                        <div class="sequence-label">Query Sequence (${queryId}):</div>
+                        <div class="sequence-display" id="${uniqueQueryId}">Loading...</div>
+                        <div class="sequence-label">Compared Sequence (${result.id}):</div>
+                        <div class="sequence-display" id="${uniqueComparedId}">Loading...</div>
+                    </div>
+                </div>
+            `;
+            
+            // Add click handler to expand/collapse and show alignment
+            const header = item.querySelector('.detail-result-header');
+            const details = item.querySelector('.detail-result-details');
+            const icon = item.querySelector('.detail-expand-icon');
+            
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', () => {
+                const isExpanded = details.style.display !== 'none';
+                
+                if (isExpanded) {
+                    details.style.display = 'none';
+                    icon.textContent = '▼';
+                } else {
+                    details.style.display = 'block';
+                    icon.textContent = '▲';
+                    
+                    // Display alignment if sequence data is loaded
+                    if (sequenceData && app) {
+                        const querySeq = sequenceData.sequences.find(s => s.id === queryId);
+                        const comparedSeq = sequenceData.sequences.find(s => s.id === result.id);
+                        
+                        if (querySeq && comparedSeq) {
+                            app.displaySequenceDiff(querySeq.sequence, comparedSeq.sequence, uniqueQueryId, uniqueComparedId);
+                        } else {
+                            document.getElementById(uniqueQueryId).textContent = 'Sequence data not available';
+                            document.getElementById(uniqueComparedId).textContent = 'Sequence data not available';
+                        }
+                    }
+                }
+            });
+            
+            return item;
+        }
+        
+        // Back to list button handler
+        document.getElementById('back-to-list-btn').addEventListener('click', () => {
+            document.getElementById('test-detail-view').classList.add('hidden');
+            document.getElementById('viewer-results').classList.remove('hidden');
+        });
     </script>
 </body>
 </html>
