@@ -1028,6 +1028,20 @@ a.back-btn {
     box-shadow: 0 0 10px rgba(0,255,0,0.3);
 }
 
+.detail-result-item.common {
+    background: rgba(255,255,0,0.1);
+    border-color: #ffff00;
+}
+
+.detail-result-item.common:hover {
+    background: rgba(255,255,0,0.15);
+    box-shadow: 0 0 15px rgba(255,255,0,0.4);
+}
+
+.detail-result-item.common .detail-result-header {
+    background: rgba(255,255,0,0.05);
+}
+
 .detail-result-header {
     display: flex;
     justify-content: space-between;
@@ -1133,6 +1147,32 @@ a.back-btn {
     color: #00ff00;
     text-shadow: 0 0 10px #00ff00;
     margin-top: 10px;
+}
+
+/* Algorithm Progress Sections */
+.algorithm-progress {
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(0,255,0,0.05);
+    border: 1px solid #00ff00;
+    border-radius: 8px;
+}
+
+.algorithm-progress-title {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #00ff00;
+    text-shadow: 0 0 10px #00ff00;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.progress-status {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 0.95rem;
+    color: #00cc00;
+    min-height: 20px;
 }
 
 .modal-title {
@@ -1322,6 +1362,70 @@ a.back-btn {
     margin-bottom: 5px;
     font-size: 0.9rem;
     font-weight: bold;
+}
+
+/* Pie Chart Styles */
+.pie-chart-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+    padding: 20px;
+}
+
+.pie-chart-svg {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    filter: drop-shadow(0 0 10px rgba(0,255,0,0.3));
+}
+
+.pie-slice {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.pie-slice:hover {
+    opacity: 0.8;
+    filter: brightness(1.2);
+}
+
+.pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 8px 12px;
+    background: rgba(0,255,0,0.05);
+    border: 1px solid rgba(0,255,0,0.2);
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.pie-legend-item:hover {
+    background: rgba(0,255,0,0.1);
+    border-color: #00ff00;
+}
+
+.pie-legend-color {
+    width: 30px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid #00ff00;
+    flex-shrink: 0;
+}
+
+.pie-legend-label {
+    font-size: 0.95rem;
+    color: #00ff00;
+    flex: 1;
 }
 
 /* Individual Results */

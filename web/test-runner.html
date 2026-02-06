@@ -30,9 +30,25 @@
                     <div>Processing: <span id="current-sequence-id">-</span></div>
                     <div>Progress: <span id="current-test">0</span> / <span id="total-tests">0</span></div>
                 </div>
-                <div class="progress-container">
-                    <div class="progress-bar" id="test-progress-bar"></div>
+                
+                <!-- Vector KNN Progress -->
+                <div class="algorithm-progress">
+                    <div class="algorithm-progress-title">Vector KNN</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="vec-progress-bar"></div>
+                    </div>
+                    <div class="progress-status" id="vec-status">Ready...</div>
                 </div>
+                
+                <!-- Needleman-Wunsch Progress -->
+                <div class="algorithm-progress">
+                    <div class="algorithm-progress-title">Needleman-Wunsch</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="nw-progress-bar"></div>
+                    </div>
+                    <div class="progress-status" id="nw-status">Ready...</div>
+                </div>
+                
                 <div class="status" id="test-status">Initializing...</div>
             </div>
             

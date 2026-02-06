@@ -641,39 +641,74 @@ class GenomeComparisonApp {
 
         // Update UI
         document.getElementById('total-tests').textContent = numSequences;
-        document.getElementById('current-test').textContent = '...';
-        document.getElementById('current-sequence-id').textContent = 'Processing on server...';
-        document.getElementById('test-status').textContent = 'Server is running algorithms (this may take several minutes)...';
-        document.getElementById('test-progress-bar').style.width = '30%';
+        document.getElementById('current-test').textContent = '0';
+        document.getElementById('current-sequence-id').textContent = 'Starting...';
+        document.getElementById('test-status').textContent = 'Running algorithms in parallel...';
+        
+        // Reset progress bars
+        document.getElementById('vec-progress-bar').style.width = '0%';
+        document.getElementById('nw-progress-bar').style.width = '0%';
+        document.getElementById('vec-status').textContent = 'Ready...';
+        document.getElementById('nw-status').textContent = 'Ready...';
 
         try {
-            console.log('Sending test request to backend...');
-            
-            // Call backend API to run the test (this will take a while)
-            const response = await fetch('http://localhost:5000/api/run-test', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    num_sequences: numSequences,
-                    k_value: kValue
-                })
-            });
-
-            console.log('Received response from backend');
-            document.getElementById('test-progress-bar').style.width = '70%';
-            document.getElementById('test-status').textContent = 'Processing results...';
-
-            if (!response.ok) {
-                throw new Error('Failed to run test on server');
+            // Select random sequences
+            const sequences = this.sequenceData.sequences;
+            const randomIndices = [];
+            const usedIndices = new Set();
+            while (randomIndices.length < Math.min(numSequences, sequences.length)) {
+                const idx = Math.floor(Math.random() * sequences.length);
+                if (!usedIndices.has(idx)) {
+                    randomIndices.push(idx);
+                    usedIndices.add(idx);
+                }
             }
 
-            const testData = await response.json();
-            console.log('Test data received:', Object.keys(testData));
+            const results = {};
             
-            // Update progress
-            document.getElementById('test-progress-bar').style.width = '100%';
+            // Process each sequence
+            for (let i = 0; i < randomIndices.length; i++) {
+                const idx = randomIndices[i];
+                const querySeq = sequences[idx];
+                
+                document.getElementById('current-test').textContent = i + 1;
+                document.getElementById('current-sequence-id').textContent = querySeq.id;
+                
+                // Run Vector KNN and Needleman-Wunsch in parallel
+                const [vecResult, nwResult] = await Promise.all([
+                    this.runVectorKNNForTest(idx, kValue, i, randomIndices.length),
+                    this.runNeedlemanWunschForTest(idx, kValue, i, randomIndices.length)
+                ]);
+                
+                // Store results
+                results[querySeq.id] = {
+                    vec_knn: {
+                        runtime: vecResult.time,
+                        returned_knn: vecResult.results.map(r => ({
+                            id: r.id,
+                            similarity: r.similarity
+                        }))
+                    },
+                    nw_knn: {
+                        runtime: nwResult.time,
+                        returned_knn: nwResult.results.map(r => ({
+                            id: r.id,
+                            similarity: r.similarity
+                        }))
+                    }
+                };
+            }
+
+            // Create test data in proper JSON format
+            const testData = {
+                header: {
+                    timestamp: new Date().toISOString(),
+                    num_sequences: numSequences,
+                    requested_knn: kValue
+                },
+                seqs: results
+            };
+
             document.getElementById('test-status').textContent = 'Test complete! Saving results...';
 
             // Save to server
@@ -694,30 +729,86 @@ class GenomeComparisonApp {
                 document.getElementById('test-status').textContent = `Test complete! Saved as ${saveResult.filename}`;
             }
 
-            // Also download locally
-            const dataStr = JSON.stringify(testData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            const timestamp = testData.header.timestamp.replace(/[:.]/g, '-');
-            link.download = `genome_test_${timestamp}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            // Convert for viewer
-            this.lastTestData = this.convertLoadedData(testData);
-
             // Show completion
             document.getElementById('test-progress').classList.add('hidden');
             document.getElementById('test-complete').classList.remove('hidden');
         } catch (error) {
             console.error('Error running test:', error);
             document.getElementById('test-status').textContent = 'Error: ' + error.message;
-            alert('Failed to run test. Make sure the backend server is running on port 5000.');
+            alert('Failed to run test: ' + error.message);
         }
+    }
+
+    async runVectorKNNForTest(queryIndex, kValue, currentTest, totalTests) {
+        const startTime = performance.now();
+        const querySeq = this.sequenceData.sequences[queryIndex];
+        const queryEmbedding = querySeq.embedding;
+        
+        document.getElementById('vec-status').textContent = `Processing ${currentTest + 1}/${totalTests}...`;
+        
+        const similarities = [];
+        for (let i = 0; i < this.sequenceData.sequences.length; i++) {
+            if (i !== queryIndex) {
+                const seq = this.sequenceData.sequences[i];
+                const sim = this.vectorKNN.cosineSimilarity(queryEmbedding, seq.embedding);
+                similarities.push({
+                    id: seq.id,
+                    similarity: sim,
+                    index: i
+                });
+            }
+        }
+        
+        similarities.sort((a, b) => b.similarity - a.similarity);
+        const results = similarities.slice(0, kValue);
+        const time = (performance.now() - startTime) / 1000;
+        
+        // Update progress bar
+        const progress = ((currentTest + 1) / totalTests) * 100;
+        document.getElementById('vec-progress-bar').style.width = progress + '%';
+        document.getElementById('vec-status').textContent = `Complete: ${time.toFixed(3)}s`;
+        
+        return { results, time };
+    }
+
+    async runNeedlemanWunschForTest(queryIndex, kValue, currentTest, totalTests) {
+        const startTime = performance.now();
+        const querySeq = this.sequenceData.sequences[queryIndex];
+        const querySequence = querySeq.sequence;
+        
+        document.getElementById('nw-status').textContent = `Processing ${currentTest + 1}/${totalTests}...`;
+        
+        const similarities = [];
+        for (let i = 0; i < this.sequenceData.sequences.length; i++) {
+            if (i !== queryIndex) {
+                const seq = this.sequenceData.sequences[i];
+                const sim = this.nwAlgorithm.getSimilarity(querySequence, seq.sequence);
+                similarities.push({
+                    id: seq.id,
+                    similarity: sim,
+                    index: i
+                });
+            }
+            
+            // Update progress periodically
+            if (i % 100 === 0) {
+                const innerProgress = (i / this.sequenceData.sequences.length) * 100;
+                const totalProgress = ((currentTest + innerProgress / 100) / totalTests) * 100;
+                document.getElementById('nw-progress-bar').style.width = totalProgress + '%';
+                await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI update
+            }
+        }
+        
+        similarities.sort((a, b) => b.similarity - a.similarity);
+        const results = similarities.slice(0, kValue);
+        const time = (performance.now() - startTime) / 1000;
+        
+        // Update progress bar
+        const progress = ((currentTest + 1) / totalTests) * 100;
+        document.getElementById('nw-progress-bar').style.width = progress + '%';
+        document.getElementById('nw-status').textContent = `Complete: ${time.toFixed(3)}s`;
+        
+        return { results, time };
     }
 
 
