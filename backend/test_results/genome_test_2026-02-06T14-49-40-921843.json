@@ -1,0 +1,29 @@
+{
+  "header": {
+    "num_sequences": 1,
+    "requested_knn": 1,
+    "timestamp": "2026-02-06T14:49:40.921843"
+  },
+  "seqs": {
+    "HG942434.1": {
+      "nw_knn": {
+        "returned_knn": [
+          {
+            "id": "HG942432.1",
+            "similarity": 0.9893617021276596
+          }
+        ],
+        "runtime": 128.82249689102173
+      },
+      "vec_knn": {
+        "returned_knn": [
+          {
+            "id": "MH236766.1",
+            "similarity": 0.9985152487412062
+          }
+        ],
+        "runtime": 0.2789161205291748
+      }
+    }
+  }
+}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genome Sequence Comparison</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Sequence Selection Screen -->
+    <div id="selection-screen" class="screen active">
+        <div class="matrix-container">
+            <div class="title">SELECT SEQUENCE</div>
+            <div id="sequence-cards" class="sequence-cards"></div>
+            <div id="selection-panel" class="selection-panel hidden">
+                <div class="selected-sequence">Selected: <span id="selected-id"></span></div>
+                <input type="number" id="k-value" placeholder="Enter K value" min="1" max="50" value="10">
+                <button id="compare-btn">COMPARE ALGORITHMS</button>
+            </div>
+            <a href="menu.html" class="back-btn">BACK TO MENU</a>
+        </div>
+    </div>
+
+    <!-- Comparison Screen -->
+    <div id="comparison-screen" class="screen">
+        <div class="comparison-container">
+            <div class="comparison-sides">
+                <div class="algorithm-side">
+                    <div class="algorithm-title">VECTOR KNN</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="vector-progress"></div>
+                        <div class="progress-time" id="vector-time">0.00s</div>
+                    </div>
+                    <div class="status" id="vector-status">Ready...</div>
+                </div>
+                
+                <div class="algorithm-side">
+                    <div class="algorithm-title">NEEDLEMAN-WUNSCH</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="nw-progress"></div>
+                        <div class="progress-time" id="nw-time">0.00s</div>
+                    </div>
+                    <div class="status" id="nw-status">Ready...</div>
+                </div>
+            </div>
+            
+            <button id="view-results-btn" class="view-results-btn hidden">VIEW RESULTS</button>
+            <button id="back-to-selection-btn" class="back-btn">BACK</button>
+        </div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="results-screen" class="screen">
+        <div class="results-container">
+            <div class="query-sequence">
+                <div class="sequence-title">QUERY SEQUENCE</div>
+                <div class="sequence-id" id="query-id"></div>
+                <div class="sequence-data" id="query-sequence-data"></div>
+            </div>
+
+            <div class="agreement-indicator">
+                <div class="agreement-title">AGREEMENT BETWEEN METHODS</div>
+                <div class="agreement-percentage" id="agreement-percentage">--</div>
+            </div>
+
+            <div class="results-comparison">
+                <div class="results-side">
+                    <div class="results-title">VECTOR KNN RESULTS</div>
+                    <div class="results-runtime" id="vector-runtime">Runtime: --</div>
+                    <div id="vector-results" class="results-list"></div>
+                </div>
+
+                <div class="results-side">
+                    <div class="results-title">NEEDLEMAN-WUNSCH RESULTS</div>
+                    <div class="results-runtime" id="nw-runtime">Runtime: --</div>
+                    <div id="nw-results" class="results-list"></div>
+                </div>
+            </div>
+            
+            <button id="new-comparison-btn" class="back-btn">NEW COMPARISON</button>
+        </div>
+    </div>
+    
+    <div class="floating-cards" id="floating-cards"></div>
+    
+    <script src="algorithms.js"></script>
+    <script src="app.js"></script>
+    <script>
+        const app = new GenomeComparisonApp();
+        // Load sequence data and initialize
+        app.loadSequenceData().then(() => {
+            app.setupEventListeners();
+            app.createFloatingCards();
+            console.log('Comparison page initialized with client-side algorithms');
+        }).catch(error => {
+            console.error('Failed to initialize:', error);
+            alert('Failed to load sequence data. Make sure the backend server is running.');
+        });
+        
+        // Handle screen transitions within comparison page
+        document.getElementById('back-to-selection-btn')?.addEventListener('click', () => {
+            app.showScreen('selection-screen');
+        });
+        
+        document.getElementById('view-results-btn')?.addEventListener('click', () => {
+            app.showResultsScreen();
+        });
+        
+        document.getElementById('new-comparison-btn')?.addEventListener('click', () => {
+            app.showScreen('selection-screen');
+            // Reset selection
+            app.selectedSequence = null;
+            document.querySelectorAll('.sequence-card.selected').forEach(c => {
+                c.classList.remove('selected');
+            });
+            document.getElementById('selection-panel').classList.add('hidden');
+        });
+    </script>
+</body>
+</html>

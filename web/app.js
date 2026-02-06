@@ -8,30 +8,63 @@ class GenomeComparisonApp {
         this.vectorKNN = new Algorithms.VectorKNN();
         this.nwMonitor = new Algorithms.PerformanceMonitor();
         this.vectorMonitor = new Algorithms.PerformanceMonitor();
-        
-        this.init();
+        this.lastTestData = null;
     }
 
     async init() {
         await this.loadSequenceData();
         this.setupEventListeners();
         this.createFloatingCards();
-        this.showScreen('selection-screen');
     }
 
     async loadSequenceData() {
         try {
-            const response = await fetch('data/sequences.json');
+            const response = await fetch('http://localhost:5000/api/sequences');
             this.sequenceData = await response.json();
             this.vectorKNN.loadData(this.sequenceData);
             console.log(`Loaded ${this.sequenceData.metadata.total_sequences} sequences`);
         } catch (error) {
             console.error('Error loading sequence data:', error);
-            this.showError('Failed to load sequence data');
+            this.showError('Failed to load sequence data. Make sure the backend server is running.');
         }
     }
 
     setupEventListeners() {
+        // Helper function to safely add event listener
+        const addListener = (id, event, handler) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener(event, handler);
+            }
+        };
+
+        // Menu navigation
+        addListener('single-comparison-btn', 'click', () => {
+            this.showScreen('selection-screen');
+        });
+
+        addListener('run-test-btn-menu', 'click', () => {
+            this.resetTestRunnerScreen();
+            this.showScreen('test-runner-screen');
+        });
+
+        addListener('load-test-btn-menu', 'click', () => {
+            this.showScreen('test-viewer-screen');
+        });
+
+        // Back to menu buttons
+        addListener('back-to-menu-btn', 'click', () => {
+            this.showScreen('menu-screen');
+        });
+
+        addListener('back-to-menu-from-runner', 'click', () => {
+            this.showScreen('menu-screen');
+        });
+
+        addListener('back-to-menu-from-viewer', 'click', () => {
+            this.showScreen('menu-screen');
+        });
+
         // Sequence card selection
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('sequence-card')) {
@@ -40,23 +73,48 @@ class GenomeComparisonApp {
         });
 
         // Compare button
-        document.getElementById('compare-btn').addEventListener('click', () => {
+        addListener('compare-btn', 'click', () => {
             this.startComparison();
         });
 
         // Restart button
-        document.getElementById('restart-btn').addEventListener('click', () => {
-            this.restart();
+        addListener('restart-btn', 'click', () => {
+            this.showScreen('menu-screen');
+        });
+
+        // Test runner
+        addListener('start-test-btn', 'click', () => {
+            this.startStatisticalTest();
+        });
+
+        addListener('view-test-results-btn', 'click', () => {
+            if (this.lastTestData) {
+                this.displayTestInViewer(this.lastTestData);
+                this.showScreen('test-viewer-screen');
+            }
+        });
+
+        // Test viewer
+        addListener('load-test-input', 'change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.loadTestFromFile(file);
+            }
         });
 
         // K value input
-        document.getElementById('k-value').addEventListener('change', (e) => {
-            this.kValue = parseInt(e.target.value) || 10;
-        });
+        const kValueEl = document.getElementById('k-value');
+        if (kValueEl) {
+            kValueEl.addEventListener('change', (e) => {
+                this.kValue = parseInt(e.target.value) || 10;
+            });
+        }
     }
 
     createFloatingCards() {
         const container = document.getElementById('sequence-cards');
+        if (!container) return; // Container doesn't exist on this page
+        
         container.innerHTML = '';
 
         // Create floating cards for a subset of sequences (for performance)
@@ -138,87 +196,123 @@ class GenomeComparisonApp {
     }
 
     async runComparison() {
-        const queryIndex = this.selectedSequence.index;
-        const querySequence = this.sequenceData.sequences[queryIndex].sequence;
+        const sequenceId = this.selectedSequence.id;
 
         // Reset progress bars
         this.resetProgressBars();
 
-        // Start both algorithms
-        const vectorPromise = this.runVectorKNN(queryIndex);
-        const nwPromise = this.runNeedlemanWunsch(querySequence, queryIndex);
+        try {
+            // Run Vector KNN (fast)
+            const vectorResult = await this.runVectorKNN(sequenceId, this.kValue, true);
+            
+            // Run Needleman-Wunsch (slow, with progress)
+            const nwResult = await this.runNeedlemanWunsch(sequenceId, this.kValue, true);
 
-        // Wait for both to complete
-        const [vectorResults, nwResults] = await Promise.all([vectorPromise, nwPromise]);
-
-        // Store results for later display
-        this.comparisonResults = { 
-            vectorResults, 
-            nwResults,
-            vectorTime: this.vectorMonitor.elapsedTime,
-            nwTime: this.nwMonitor.elapsedTime
-        };
-        
-        // Show "View Results" button instead of auto-transitioning
-        this.showViewResultsButton();
+            // Store results for later display
+            this.comparisonResults = { 
+                vectorResults: vectorResult.results, 
+                nwResults: nwResult.results,
+                vectorTime: vectorResult.time,
+                nwTime: nwResult.time
+            };
+            
+            // Show "View Results" button instead of auto-transitioning
+            this.showViewResultsButton();
+        } catch (error) {
+            console.error('Error running comparison:', error);
+            document.getElementById('vector-status').textContent = 'Error!';
+            document.getElementById('nw-status').textContent = 'Error!';
+            alert('Failed to run comparison: ' + error.message);
+        }
     }
 
-    async runVectorKNN(queryIndex) {
+    async runVectorKNN(sequenceIdOrIndex, kValue = this.kValue, showProgress = true) {
+        // Find the index if a sequence ID was provided
+        let queryIndex;
+        if (typeof sequenceIdOrIndex === 'string') {
+            queryIndex = this.sequenceData.sequences.findIndex(s => s.id === sequenceIdOrIndex);
+        } else {
+            queryIndex = sequenceIdOrIndex;
+        }
+
         const statusEl = document.getElementById('vector-status');
         const progressEl = document.getElementById('vector-progress');
         const timeEl = document.getElementById('vector-time');
 
-        statusEl.textContent = 'Running Vector KNN...';
+        if (showProgress) {
+            statusEl.textContent = 'Running Vector KNN...';
+        }
         this.vectorMonitor.start();
 
-        // Update progress in real-time
-        const progressInterval = setInterval(() => {
-            const progress = Math.min(95, (this.vectorMonitor.getCurrentTime() / 0.5) * 100);
-            progressEl.style.width = progress + '%';
-            timeEl.textContent = Algorithms.formatTime(this.vectorMonitor.getCurrentTime());
-        }, 50);
+        let progressInterval;
+        if (showProgress) {
+            // Update progress in real-time
+            progressInterval = setInterval(() => {
+                const progress = Math.min(95, (this.vectorMonitor.getCurrentTime() / 0.5) * 100);
+                progressEl.style.width = progress + '%';
+                timeEl.textContent = Algorithms.formatTime(this.vectorMonitor.getCurrentTime());
+            }, 50);
+        }
 
         try {
             // Use setTimeout to allow UI to update
             const results = await new Promise((resolve) => {
                 setTimeout(() => {
-                    const res = this.vectorKNN.findKNN(queryIndex, this.kValue);
+                    const res = this.vectorKNN.findKNN(queryIndex, kValue);
                     resolve(res);
                 }, 10);
             });
             
-            clearInterval(progressInterval);
+            if (progressInterval) clearInterval(progressInterval);
             
-            progressEl.style.width = '100%';
             const totalTime = this.vectorMonitor.stop();
-            timeEl.textContent = Algorithms.formatTime(totalTime);
-            statusEl.textContent = `Completed in ${Algorithms.formatTime(totalTime)}`;
             
-            return results;
+            if (showProgress) {
+                progressEl.style.width = '100%';
+                timeEl.textContent = Algorithms.formatTime(totalTime);
+                statusEl.textContent = `Completed in ${Algorithms.formatTime(totalTime)}`;
+            }
+            
+            return { results, time: totalTime };
         } catch (error) {
-            clearInterval(progressInterval);
-            statusEl.textContent = 'Error!';
+            if (progressInterval) clearInterval(progressInterval);
+            if (showProgress) statusEl.textContent = 'Error!';
             throw error;
         }
     }
 
-    async runNeedlemanWunsch(querySequence, queryIndex) {
+    async runNeedlemanWunsch(sequenceIdOrIndex, kValue = this.kValue, showProgress = true) {
+        // Find the index and sequence if a sequence ID was provided
+        let queryIndex, querySequence;
+        if (typeof sequenceIdOrIndex === 'string') {
+            queryIndex = this.sequenceData.sequences.findIndex(s => s.id === sequenceIdOrIndex);
+            querySequence = this.sequenceData.sequences[queryIndex].sequence;
+        } else {
+            queryIndex = sequenceIdOrIndex;
+            querySequence = this.sequenceData.sequences[queryIndex].sequence;
+        }
+
         const statusEl = document.getElementById('nw-status');
         const progressEl = document.getElementById('nw-progress');
         const timeEl = document.getElementById('nw-time');
 
-        statusEl.textContent = 'Running Needleman-Wunsch...';
+        if (showProgress) {
+            statusEl.textContent = 'Running Needleman-Wunsch...';
+        }
         this.nwMonitor.start();
 
         // Calculate progress based on sequences processed
         const totalSequences = this.sequenceData.sequences.length;
         let processedCount = 0;
 
-        const progressInterval = setInterval(() => {
-            const progress = Math.min(95, (processedCount / totalSequences) * 100);
-            progressEl.style.width = progress + '%';
-            timeEl.textContent = Algorithms.formatTime(this.nwMonitor.getCurrentTime());
-        }, 100);
+        let progressInterval;
+        if (showProgress) {
+            progressInterval = setInterval(() => {
+                const progress = Math.min(95, (processedCount / totalSequences) * 100);
+                progressEl.style.width = progress + '%';
+                timeEl.textContent = Algorithms.formatTime(this.nwMonitor.getCurrentTime());
+            }, 100);
+        }
 
         try {
             const similarities = [];
@@ -249,17 +343,22 @@ class GenomeComparisonApp {
             
             // Sort by similarity (descending - highest first)
             similarities.sort((a, b) => b.similarity - a.similarity);
-            const results = similarities.slice(0, this.kValue);
+            const results = similarities.slice(0, kValue);
             
-            progressEl.style.width = '100%';
+            if (progressInterval) clearInterval(progressInterval);
+            
             const totalTime = this.nwMonitor.stop();
-            timeEl.textContent = Algorithms.formatTime(totalTime);
-            statusEl.textContent = `Completed in ${Algorithms.formatTime(totalTime)}`;
             
-            return results;
+            if (showProgress) {
+                progressEl.style.width = '100%';
+                timeEl.textContent = Algorithms.formatTime(totalTime);
+                statusEl.textContent = `Completed in ${Algorithms.formatTime(totalTime)}`;
+            }
+            
+            return { results, time: totalTime };
         } catch (error) {
-            clearInterval(progressInterval);
-            statusEl.textContent = 'Error!';
+            if (progressInterval) clearInterval(progressInterval);
+            if (showProgress) statusEl.textContent = 'Error!';
             throw error;
         }
     }
@@ -308,6 +407,10 @@ class GenomeComparisonApp {
         document.getElementById('vector-runtime').textContent = `Runtime: ${Algorithms.formatTime(vectorTime)}`;
         document.getElementById('nw-runtime').textContent = `Runtime: ${Algorithms.formatTime(nwTime)}`;
 
+        // Calculate and display agreement
+        const agreement = this.calculateAgreement(vectorResults, nwResults);
+        document.getElementById('agreement-percentage').textContent = `${agreement.toFixed(1)}%`;
+
         // Find common results
         const vectorIds = new Set(vectorResults.map(r => r.id));
         const commonIds = nwResults.filter(r => vectorIds.has(r.id)).map(r => r.id);
@@ -327,6 +430,20 @@ class GenomeComparisonApp {
             const item = this.createResultItem(result, commonIds.includes(result.id), idx + 1, querySeq.sequence, 'nw');
             nwContainer.appendChild(item);
         });
+    }
+
+    calculateAgreement(vectorResults, nwResults) {
+        const vectorIds = new Set(vectorResults.map(r => r.id));
+        const nwIds = new Set(nwResults.map(r => r.id));
+        
+        let commonCount = 0;
+        for (const id of vectorIds) {
+            if (nwIds.has(id)) {
+                commonCount++;
+            }
+        }
+        
+        return (commonCount / vectorResults.length) * 100;
     }
 
     createResultItem(result, isCommon, rank, querySequence, algorithmType) {
@@ -500,6 +617,323 @@ class GenomeComparisonApp {
         console.error(message);
         // You could add a proper error display here
         alert(message);
+    }
+
+    resetTestRunnerScreen() {
+        // Reset test runner to initial state
+        const configSection = document.querySelector('.test-config');
+        if (configSection) {
+            configSection.style.display = 'block';
+        }
+        document.getElementById('test-progress').classList.add('hidden');
+        document.getElementById('test-complete').classList.add('hidden');
+        document.getElementById('test-progress-bar').style.width = '0%';
+    }
+
+    async startStatisticalTest() {
+        const numSequences = parseInt(document.getElementById('test-num-sequences').value) || 10;
+        const kValue = parseInt(document.getElementById('test-k-value').value) || 10;
+
+        // Show progress section
+        document.querySelector('.test-config').style.display = 'none';
+        document.getElementById('test-progress').classList.remove('hidden');
+        document.getElementById('test-complete').classList.add('hidden');
+
+        // Update UI
+        document.getElementById('total-tests').textContent = numSequences;
+        document.getElementById('current-test').textContent = '...';
+        document.getElementById('current-sequence-id').textContent = 'Processing on server...';
+        document.getElementById('test-status').textContent = 'Server is running algorithms (this may take several minutes)...';
+        document.getElementById('test-progress-bar').style.width = '30%';
+
+        try {
+            console.log('Sending test request to backend...');
+            
+            // Call backend API to run the test (this will take a while)
+            const response = await fetch('http://localhost:5000/api/run-test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    num_sequences: numSequences,
+                    k_value: kValue
+                })
+            });
+
+            console.log('Received response from backend');
+            document.getElementById('test-progress-bar').style.width = '70%';
+            document.getElementById('test-status').textContent = 'Processing results...';
+
+            if (!response.ok) {
+                throw new Error('Failed to run test on server');
+            }
+
+            const testData = await response.json();
+            console.log('Test data received:', Object.keys(testData));
+            
+            // Update progress
+            document.getElementById('test-progress-bar').style.width = '100%';
+            document.getElementById('test-status').textContent = 'Test complete! Saving results...';
+
+            // Save to server
+            const saveResponse = await fetch('http://localhost:5000/api/save-test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testData)
+            });
+
+            if (!saveResponse.ok) {
+                console.error('Failed to save to server:', await saveResponse.text());
+                document.getElementById('test-status').textContent = 'Test complete! (Warning: Failed to save to server)';
+            } else {
+                const saveResult = await saveResponse.json();
+                console.log('Saved to server:', saveResult.filename);
+                document.getElementById('test-status').textContent = `Test complete! Saved as ${saveResult.filename}`;
+            }
+
+            // Also download locally
+            const dataStr = JSON.stringify(testData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            const timestamp = testData.header.timestamp.replace(/[:.]/g, '-');
+            link.download = `genome_test_${timestamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            // Convert for viewer
+            this.lastTestData = this.convertLoadedData(testData);
+
+            // Show completion
+            document.getElementById('test-progress').classList.add('hidden');
+            document.getElementById('test-complete').classList.remove('hidden');
+        } catch (error) {
+            console.error('Error running test:', error);
+            document.getElementById('test-status').textContent = 'Error: ' + error.message;
+            alert('Failed to run test. Make sure the backend server is running on port 5000.');
+        }
+    }
+
+
+    saveCompleteTestData(testResults, numSequences, kValue) {
+        const timestamp = new Date().toISOString();
+        
+        // Build sequences object with structure: {seq_id: {vec_knn: {...}, nw_knn: {...}}}
+        const sequences = {};
+        testResults.forEach(result => {
+            sequences[result.sequenceId] = {
+                vec_knn: {
+                    runtime: result.vectorTime,
+                    returned_knn: result.vectorKNN.map(r => ({
+                        id: r.id,
+                        similarity: r.similarity
+                    }))
+                },
+                nw_knn: {
+                    runtime: result.nwTime,
+                    returned_knn: result.nwKNN.map(r => ({
+                        id: r.id,
+                        similarity: r.similarity
+                    }))
+                }
+            };
+        });
+
+        const exportData = {
+            header: {
+                timestamp: timestamp,
+                num_sequences: numSequences,
+                requested_knn: kValue
+            },
+            seqs: sequences
+        };
+
+        // Create downloadable JSON file
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        const filename = `genome_test_${timestamp.replace(/[:.]/g, '-')}.json`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log(`Complete test data saved to ${filename}`);
+        
+        // Return in format compatible with viewer (convert back)
+        return {
+            metadata: {
+                timestamp: timestamp,
+                numSequencesTested: numSequences,
+                kValue: kValue
+            },
+            testResults: testResults
+        };
+    }
+
+    loadTestFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                // Convert new JSON structure to internal format
+                const convertedData = this.convertLoadedData(data);
+                this.displayTestInViewer(convertedData);
+                console.log('Test data loaded successfully');
+            } catch (error) {
+                console.error('Error loading test data:', error);
+                alert('Failed to load test data. Please check the file format.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    convertLoadedData(data) {
+        // Convert from new structure {header: {...}, seqs: {...}} to internal format
+        const testResults = [];
+        
+        Object.keys(data.seqs).forEach(sequenceId => {
+            const seqData = data.seqs[sequenceId];
+            
+            // Calculate agreement
+            const vecIds = new Set(seqData.vec_knn.returned_knn.map(r => r.id));
+            const nwIds = new Set(seqData.nw_knn.returned_knn.map(r => r.id));
+            let commonCount = 0;
+            for (const id of vecIds) {
+                if (nwIds.has(id)) commonCount++;
+            }
+            const agreement = (commonCount / seqData.vec_knn.returned_knn.length) * 100;
+            
+            testResults.push({
+                sequenceId: sequenceId,
+                sequenceIndex: 0, // Not stored in new format
+                agreement: agreement,
+                vectorTime: seqData.vec_knn.runtime,
+                nwTime: seqData.nw_knn.runtime,
+                vectorKNN: seqData.vec_knn.returned_knn,
+                nwKNN: seqData.nw_knn.returned_knn
+            });
+        });
+        
+        // Calculate distribution
+        const distribution = new Array(10).fill(0);
+        testResults.forEach(result => {
+            const bucket = Math.min(9, Math.floor(result.agreement / 10));
+            distribution[bucket]++;
+        });
+        
+        const avgAgreement = testResults.reduce((sum, r) => sum + r.agreement, 0) / testResults.length;
+        
+        return {
+            metadata: {
+                timestamp: data.header.timestamp,
+                numSequencesTested: data.header.num_sequences,
+                kValue: data.header.requested_knn,
+                averageAgreement: avgAgreement
+            },
+            distribution: distribution,
+            testResults: testResults
+        };
+    }
+
+    displayTestInViewer(testData) {
+        // Show metadata
+        document.getElementById('test-metadata').classList.remove('hidden');
+        document.getElementById('test-data-display').classList.remove('hidden');
+
+        const date = new Date(testData.metadata.timestamp);
+        document.getElementById('test-date').textContent = date.toLocaleString();
+        document.getElementById('test-num-sequences-display').textContent = testData.metadata.numSequencesTested;
+        document.getElementById('test-k-value-display').textContent = testData.metadata.kValue;
+        document.getElementById('test-avg-agreement').textContent = `${testData.metadata.averageAgreement.toFixed(1)}%`;
+
+        // Display distribution chart
+        this.displayDistributionChart(testData.distribution, 'viewer-distribution-bars');
+
+        // Display individual results
+        const resultsContainer = document.getElementById('viewer-individual-results');
+        resultsContainer.innerHTML = '';
+
+        testData.testResults.forEach(result => {
+            const card = document.createElement('div');
+            card.className = 'test-result-card';
+
+            card.innerHTML = `
+                <div class="test-card-id">${result.sequenceId}</div>
+                <div class="test-card-agreement">${result.agreement.toFixed(1)}% Agreement</div>
+                <div style="font-size: 0.9rem; margin-top: 10px; opacity: 0.8;">
+                    Vector KNN: ${result.vectorTime.toFixed(3)}s<br>
+                    NW: ${result.nwTime.toFixed(3)}s
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                this.showDetailedComparison(result, testData.metadata.kValue);
+            });
+
+            resultsContainer.appendChild(card);
+        });
+    }
+
+    displayDistributionChart(distribution, containerId) {
+        const maxCount = Math.max(...distribution, 1);
+        const barsContainer = document.getElementById(containerId);
+        barsContainer.innerHTML = '';
+
+        distribution.forEach((count, idx) => {
+            const barContainer = document.createElement('div');
+            barContainer.className = 'bar-container';
+
+            const barCount = document.createElement('div');
+            barCount.className = 'bar-count';
+            barCount.textContent = count;
+
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            
+            const maxHeight = 180;
+            const height = count === 0 ? 0 : Math.max(20, (count / maxCount) * maxHeight);
+            bar.style.height = `${height}px`;
+
+            const label = document.createElement('div');
+            label.className = 'bar-label';
+            label.textContent = `${idx * 10}-${(idx + 1) * 10}%`;
+
+            barContainer.appendChild(barCount);
+            barContainer.appendChild(bar);
+            barContainer.appendChild(label);
+            barsContainer.appendChild(barContainer);
+        });
+    }
+
+    showDetailedComparison(testResult, kValue) {
+        // Set up for displaying detailed comparison
+        this.selectedSequence = {
+            id: testResult.sequenceId,
+            index: testResult.sequenceIndex
+        };
+
+        // Convert back to expected format
+        this.comparisonResults = {
+            vectorResults: testResult.vectorKNN,
+            nwResults: testResult.nwKNN,
+            vectorTime: testResult.vectorTime,
+            nwTime: testResult.nwTime
+        };
+
+        this.kValue = kValue;
+        this.showResultsScreen();
     }
 }
 

@@ -1,0 +1,29 @@
+{
+  "header": {
+    "num_sequences": 1,
+    "requested_knn": 1,
+    "timestamp": "2026-02-06T14:44:00.054267"
+  },
+  "seqs": {
+    "FN298460.1": {
+      "nw_knn": {
+        "returned_knn": [
+          {
+            "id": "JQ003824.1",
+            "similarity": 0.9975728155339806
+          }
+        ],
+        "runtime": 112.76699781417847
+      },
+      "vec_knn": {
+        "returned_knn": [
+          {
+            "id": "JQ003824.1",
+            "similarity": 0.9997753313743101
+          }
+        ],
+        "runtime": 0.2387223243713379
+      }
+    }
+  }
+}

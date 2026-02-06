@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Results Viewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="screen active">
+        <div class="matrix-container">
+            <div class="title">TEST RESULTS VIEWER</div>
+            
+            <!-- File Selection -->
+            <div id="file-selection" class="test-config">
+                <div class="config-group">
+                    <label>Select Test Result:</label>
+                    <select id="test-file-select" class="file-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <button id="load-selected-test-btn" class="menu-btn">LOAD TEST</button>
+            </div>
+            
+            <!-- Results Display -->
+            <div id="viewer-results" class="viewer-results hidden">
+                <div class="viewer-header">
+                    <div class="viewer-info">
+                        <div>Sequences Tested: <span id="viewer-num-sequences">-</span></div>
+                        <div>K Value: <span id="viewer-k-value">-</span></div>
+                        <div>Timestamp: <span id="viewer-timestamp">-</span></div>
+                    </div>
+                </div>
+                
+                <div class="viewer-content">
+                    <div id="viewer-sequence-list" class="viewer-sequence-list"></div>
+                </div>
+            </div>
+            
+            <a href="menu.html" class="back-btn">BACK TO MENU</a>
+        </div>
+    </div>
+    
+    <div class="floating-cards" id="floating-cards"></div>
+    
+    <script src="algorithms.js"></script>
+    <script src="app.js"></script>
+    <script>
+        const app = new GenomeComparisonApp();
+        app.createFloatingCards();
+        
+        // Load list of test files
+        fetch('http://localhost:5000/api/list-tests')
+            .then(response => response.json())
+            .then(files => {
+                const select = document.getElementById('test-file-select');
+                select.innerHTML = '';
+                
+                if (files.length === 0) {
+                    select.innerHTML = '<option value="">No test results found</option>';
+                } else {
+                    files.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file.filename;
+                        const date = new Date(file.timestamp * 1000);
+                        option.textContent = `${file.filename} (${date.toLocaleString()})`;
+                        select.appendChild(option);
+                    });
+                }
+                
+                // Check if we should auto-load the last test
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('view') === 'last' && files.length > 0) {
+                    select.value = files[0].filename;
+                    loadSelectedTest();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading test list:', error);
+                alert('Failed to load test results. Make sure the backend server is running.');
+            });
+        
+        // Load selected test
+        document.getElementById('load-selected-test-btn').addEventListener('click', loadSelectedTest);
+        
+        function loadSelectedTest() {
+            const filename = document.getElementById('test-file-select').value;
+            if (!filename) return;
+            
+            fetch(`http://localhost:5000/api/load-test/${filename}`)
+                .then(response => response.json())
+                .then(data => {
+                    displayTestResults(data);
+                })
+                .catch(error => {
+                    console.error('Error loading test:', error);
+                    alert('Failed to load test results.');
+                });
+        }
+        
+        function displayTestResults(data) {
+            // Show results section
+            document.getElementById('file-selection').style.display = 'none';
+            document.getElementById('viewer-results').classList.remove('hidden');
+            
+            // Display header info
+            document.getElementById('viewer-num-sequences').textContent = data.header.num_sequences;
+            document.getElementById('viewer-k-value').textContent = data.header.requested_knn;
+            document.getElementById('viewer-timestamp').textContent = new Date(data.header.timestamp).toLocaleString();
+            
+            // Display sequence results
+            const listContainer = document.getElementById('viewer-sequence-list');
+            listContainer.innerHTML = '';
+            
+            for (const [seqId, results] of Object.entries(data.seqs)) {
+                const seqCard = document.createElement('div');
+                seqCard.className = 'viewer-sequence-card';
+                
+                // Calculate agreement
+                const vecIds = new Set(results.vec_knn.returned_knn.map(r => r.id));
+                const nwIds = new Set(results.nw_knn.returned_knn.map(r => r.id));
+                const agreement = [...vecIds].filter(id => nwIds.has(id)).length;
+                const agreementPercent = (agreement / data.header.requested_knn * 100).toFixed(1);
+                
+                seqCard.innerHTML = `
+                    <div class="viewer-seq-header">
+                        <span class="viewer-seq-id">${seqId}</span>
+                        <span class="viewer-agreement ${agreementPercent >= 70 ? 'high' : agreementPercent >= 40 ? 'medium' : 'low'}">
+                            Agreement: ${agreementPercent}%
+                        </span>
+                    </div>
+                    <div class="viewer-seq-times">
+                        <span>Vector KNN: ${results.vec_knn.runtime.toFixed(3)}s</span>
+                        <span>NW: ${results.nw_knn.runtime.toFixed(3)}s</span>
+                    </div>
+                `;
+                
+                listContainer.appendChild(seqCard);
+            }
+        }
+    </script>
+</body>
+</html>

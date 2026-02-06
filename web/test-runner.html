@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Statistical Test</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="screen active">
+        <div class="matrix-container">
+            <div class="title">STATISTICAL TEST RUNNER</div>
+            
+            <!-- Configuration Section -->
+            <div class="test-config">
+                <div class="config-group">
+                    <label for="test-num-sequences">Number of Sequences:</label>
+                    <input type="number" id="test-num-sequences" min="1" max="100" value="10">
+                </div>
+                <div class="config-group">
+                    <label for="test-k-value">K Value:</label>
+                    <input type="number" id="test-k-value" min="1" max="50" value="10">
+                </div>
+                <button id="start-test-btn" class="menu-btn">START TEST</button>
+            </div>
+            
+            <!-- Progress Section -->
+            <div id="test-progress" class="test-progress hidden">
+                <div class="progress-info">
+                    <div>Processing: <span id="current-sequence-id">-</span></div>
+                    <div>Progress: <span id="current-test">0</span> / <span id="total-tests">0</span></div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="test-progress-bar"></div>
+                </div>
+                <div class="status" id="test-status">Initializing...</div>
+            </div>
+            
+            <!-- Completion Section -->
+            <div id="test-complete" class="test-complete hidden">
+                <div class="complete-message">✓ Test Complete!</div>
+                <button id="view-test-results-btn" class="menu-btn">VIEW RESULTS</button>
+            </div>
+            
+            <a href="menu.html" class="back-btn">BACK TO MENU</a>
+        </div>
+    </div>
+    
+    <div class="floating-cards" id="floating-cards"></div>
+    
+    <script src="algorithms.js"></script>
+    <script src="app.js"></script>
+    <script>
+        const app = new GenomeComparisonApp();
+        app.createFloatingCards();
+        
+        // Load sequence data for test runner
+        fetch('http://localhost:5000/api/sequences')
+            .then(response => response.json())
+            .then(data => {
+                app.sequenceData = data;
+            })
+            .catch(error => {
+                console.error('Error loading sequences:', error);
+                alert('Failed to load sequence data. Make sure the backend server is running.');
+            });
+        
+        // Start test button
+        document.getElementById('start-test-btn').addEventListener('click', () => {
+            app.startStatisticalTest();
+        });
+        
+        // View results button
+        document.getElementById('view-test-results-btn').addEventListener('click', () => {
+            window.location.href = 'test-viewer.html?view=last';
+        });
+    </script>
+</body>
+</html>

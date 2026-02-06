@@ -7,8 +7,20 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Main Menu Screen -->
+    <div id="menu-screen" class="screen active">
+        <div class="matrix-container">
+            <div class="title">GENOME SEQUENCE COMPARISON</div>
+            <div class="menu-options">
+                <button id="single-comparison-btn" class="menu-btn">SINGLE SEQUENCE COMPARISON</button>
+                <button id="run-test-btn-menu" class="menu-btn">RUN STATISTICAL TEST</button>
+                <button id="load-test-btn-menu" class="menu-btn">LOAD TEST RESULTS</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Step 1: Sequence Selection Screen -->
-    <div id="selection-screen" class="screen active">
+    <div id="selection-screen" class="screen">
         <div class="matrix-container">
             <div class="title">SELECT SEQUENCE</div>
             <div id="sequence-cards" class="sequence-cards"></div>
@@ -17,6 +29,7 @@
                 <input type="number" id="k-value" placeholder="Enter K value" min="1" max="50" value="10">
                 <button id="compare-btn">COMPARE ALGORITHMS</button>
             </div>
+            <button id="back-to-menu-btn" class="back-btn">BACK TO MENU</button>
         </div>
     </div>
 
@@ -54,6 +67,11 @@
                 <div class="sequence-data" id="query-sequence-data"></div>
             </div>
             
+            <div class="agreement-indicator">
+                <div class="agreement-title">AGREEMENT BETWEEN METHODS</div>
+                <div class="agreement-percentage" id="agreement-percentage">--</div>
+            </div>
+            
             <div class="results-comparison">
                 <div class="results-side">
                     <div class="results-title">VECTOR KNN RESULTS</div>
@@ -70,6 +88,94 @@
         </div>
         
         <button id="restart-btn" class="restart-btn">RESTART</button>
+    </div>
+
+    <!-- Statistical Test Runner Screen -->
+    <div id="test-runner-screen" class="screen">
+        <div class="test-runner-container">
+            <div class="test-title">RUN STATISTICAL TEST</div>
+            
+            <div class="test-config">
+                <div class="config-item">
+                    <label for="test-num-sequences">Number of sequences to test:</label>
+                    <input type="number" id="test-num-sequences" min="1" max="100" value="10">
+                </div>
+                
+                <div class="config-item">
+                    <label for="test-k-value">K (nearest neighbors):</label>
+                    <input type="number" id="test-k-value" min="1" max="50" value="10">
+                </div>
+                
+                <button id="start-test-btn" class="action-btn">START TEST</button>
+            </div>
+            
+            <div id="test-progress" class="test-progress hidden">
+                <div class="progress-info">
+                    <div class="progress-label">Testing sequence <span id="current-test">0</span> of <span id="total-tests">0</span></div>
+                    <div class="progress-label">Current: <span id="current-sequence-id">--</span></div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="test-progress-bar"></div>
+                </div>
+                <div class="progress-status" id="test-status">Initializing...</div>
+            </div>
+            
+            <div id="test-complete" class="test-complete hidden">
+                <div class="complete-message">✓ Test Complete!</div>
+                <div class="complete-info">Results saved to JSON file</div>
+                <button id="view-test-results-btn" class="action-btn">VIEW RESULTS</button>
+            </div>
+        </div>
+        
+        <button id="back-to-menu-from-runner" class="back-btn">BACK TO MENU</button>
+    </div>
+
+    <!-- Test Results Viewer Screen -->
+    <div id="test-viewer-screen" class="screen">
+        <div class="test-viewer-container">
+            <div class="viewer-header">
+                <div class="test-title">TEST RESULTS VIEWER</div>
+                <div class="load-test-section">
+                    <label for="load-test-input" class="load-test-btn">LOAD TEST FILE</label>
+                    <input type="file" id="load-test-input" accept=".json" style="display: none;">
+                </div>
+            </div>
+            
+            <div id="test-metadata" class="test-metadata hidden">
+                <div class="metadata-grid">
+                    <div class="metadata-item">
+                        <div class="metadata-label">Test Date:</div>
+                        <div class="metadata-value" id="test-date">--</div>
+                    </div>
+                    <div class="metadata-item">
+                        <div class="metadata-label">Sequences Tested:</div>
+                        <div class="metadata-value" id="test-num-sequences-display">--</div>
+                    </div>
+                    <div class="metadata-item">
+                        <div class="metadata-label">K Value:</div>
+                        <div class="metadata-value" id="test-k-value-display">--</div>
+                    </div>
+                    <div class="metadata-item">
+                        <div class="metadata-label">Average Agreement:</div>
+                        <div class="metadata-value" id="test-avg-agreement">--</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="test-data-display" class="test-data-display hidden">
+                <div class="data-section">
+                    <div class="section-title">AGREEMENT DISTRIBUTION</div>
+                    <div id="viewer-distribution-bars" class="distribution-bars"></div>
+                </div>
+                
+                <div class="data-section">
+                    <div class="section-title">INDIVIDUAL TEST RESULTS</div>
+                    <div id="viewer-individual-results" class="individual-results"></div>
+                </div>
+            </div>
+        </div>
+        
+        <button id="back-to-menu-from-viewer" class="back-btn">BACK TO MENU</button>
     </div>
 
     <script src="algorithms.js"></script>

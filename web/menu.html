@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genome Sequence Comparison - Menu</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="screen active">
+        <div class="matrix-container">
+            <div class="title">GENOME SEQUENCE COMPARISON</div>
+            <div class="menu-options">
+                <a href="comparison.html" class="menu-btn">SINGLE SEQUENCE COMPARISON</a>
+                <a href="test-runner.html" class="menu-btn">RUN STATISTICAL TEST</a>
+                <a href="test-viewer.html" class="menu-btn">LOAD TEST RESULTS</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="floating-cards" id="floating-cards"></div>
+    
+    <script src="algorithms.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Initialize floating cards only
+        const app = new GenomeComparisonApp();
+        app.createFloatingCards();
+    </script>
+</body>
+</html>

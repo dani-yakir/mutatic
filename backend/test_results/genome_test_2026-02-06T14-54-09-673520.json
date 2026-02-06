@@ -1,0 +1,29 @@
+{
+  "header": {
+    "num_sequences": 1,
+    "requested_knn": 1,
+    "timestamp": "2026-02-06T14:54:09.673520"
+  },
+  "seqs": {
+    "LC889955.1": {
+      "nw_knn": {
+        "returned_knn": [
+          {
+            "id": "LC889810.1",
+            "similarity": 1
+          }
+        ],
+        "runtime": 30.613703727722168
+      },
+      "vec_knn": {
+        "returned_knn": [
+          {
+            "id": "LC889810.1",
+            "similarity": 0.9999999999999999
+          }
+        ],
+        "runtime": 0.2885172367095947
+      }
+    }
+  }
+}
