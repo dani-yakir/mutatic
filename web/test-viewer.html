@@ -38,7 +38,16 @@
                 <!-- Agreement Distribution Chart -->
                 <div id="distribution-section" class="distribution-section hidden">
                     <div class="section-title">AGREEMENT DISTRIBUTION</div>
-                    <div id="viewer-distribution-bars" class="distribution-bars"></div>
+                    <div class="charts-container-vertical">
+                        <div class="chart-wrapper-full">
+                            <div class="chart-subtitle">PIE CHART</div>
+                            <div id="viewer-distribution-pie" class="pie-chart-container"></div>
+                        </div>
+                        <div class="chart-wrapper-full">
+                            <div class="chart-subtitle">BAR CHART</div>
+                            <div id="viewer-distribution-bars" class="bar-chart-container-horizontal"></div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Runtime Comparison Chart -->
@@ -195,28 +204,9 @@
                 distribution[bucket]++;
             });
             
-            const pieContainer = document.getElementById('viewer-distribution-bars');
-            pieContainer.innerHTML = '';
-            pieContainer.className = 'pie-chart-container';
-            
-            // Create SVG pie chart
-            const svgNS = 'http://www.w3.org/2000/svg';
-            const svg = document.createElementNS(svgNS, 'svg');
-            svg.setAttribute('viewBox', '0 0 400 400');
-            svg.setAttribute('class', 'pie-chart-svg');
-            
-            const total = distribution.reduce((a, b) => a + b, 0);
-            let currentAngle = -90; // Start at top
-            
-            // Create pie slices
-            distribution.forEach((count, i) => {
-                if (count === 0) return;
-                
-                const percentage = (count / total) * 100;
-                const sliceAngle = (count / total) * 360;
-                
-                // Calculate color gradient: red (0%) -> orange (25%) -> yellow (50%) -> light green (75%) -> green (100%)
-                const bucketMidpoint = (i * 10 + (i + 1) * 10) / 2;
+            // Shared color gradient function
+            function getColorForBucket(bucketIndex) {
+                const bucketMidpoint = (bucketIndex * 10 + (bucketIndex + 1) * 10) / 2;
                 let red, green, blue;
                 
                 if (bucketMidpoint <= 25) {
@@ -241,7 +231,29 @@
                     blue = 0;
                 }
                 
-                const color = `rgb(${red}, ${green}, ${blue})`;
+                return `rgb(${red}, ${green}, ${blue})`;
+            }
+            
+            // ===== CREATE PIE CHART =====
+            const pieContainer = document.getElementById('viewer-distribution-pie');
+            pieContainer.innerHTML = '';
+            
+            // Create SVG pie chart
+            const svgNS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(svgNS, 'svg');
+            svg.setAttribute('viewBox', '0 0 400 400');
+            svg.setAttribute('class', 'pie-chart-svg');
+            
+            const total = distribution.reduce((a, b) => a + b, 0);
+            let currentAngle = -90; // Start at top
+            
+            // Create pie slices
+            distribution.forEach((count, i) => {
+                if (count === 0) return;
+                
+                const percentage = (count / total) * 100;
+                const sliceAngle = (count / total) * 360;
+                const color = getColorForBucket(i);
                 
                 // Create path for pie slice
                 const startAngle = currentAngle;
@@ -283,57 +295,44 @@
             
             pieContainer.appendChild(svg);
             
-            // Create legend
-            const legend = document.createElement('div');
-            legend.className = 'pie-legend';
+            // ===== CREATE BAR CHART (HORIZONTAL) =====
+            const barsContainer = document.getElementById('viewer-distribution-bars');
+            barsContainer.innerHTML = '';
+            
+            const maxCount = Math.max(...distribution);
             
             distribution.forEach((count, i) => {
-                if (count === 0) return;
+                const barRow = document.createElement('div');
+                barRow.className = 'bar-row';
                 
-                const bucketMidpoint = (i * 10 + (i + 1) * 10) / 2;
-                let red, green, blue;
+                const barLabel = document.createElement('div');
+                barLabel.className = 'bar-label-horizontal';
+                barLabel.textContent = `${i * 10}-${(i + 1) * 10}%`;
                 
-                if (bucketMidpoint <= 25) {
-                    // Red to Orange (0-25%)
-                    red = 255;
-                    green = Math.round(165 * (bucketMidpoint / 25));
-                    blue = 0;
-                } else if (bucketMidpoint <= 50) {
-                    // Orange to Yellow (25-50%)
-                    red = 255;
-                    green = Math.round(165 + 90 * ((bucketMidpoint - 25) / 25));
-                    blue = 0;
-                } else if (bucketMidpoint <= 75) {
-                    // Yellow to Light Green (50-75%)
-                    red = Math.round(255 * (1 - (bucketMidpoint - 50) / 25));
-                    green = 255;
-                    blue = 0;
-                } else {
-                    // Light Green to Green (75-100%)
-                    red = 0;
-                    green = 255;
-                    blue = 0;
-                }
+                const barWrapper = document.createElement('div');
+                barWrapper.className = 'bar-wrapper-horizontal';
                 
-                const color = `rgb(${red}, ${green}, ${blue})`;
+                const bar = document.createElement('div');
+                bar.className = 'bar-horizontal';
+                const widthPercent = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                bar.style.width = widthPercent + '%';
+                bar.style.minWidth = count > 0 ? '20px' : '0px';
                 
-                const legendItem = document.createElement('div');
-                legendItem.className = 'pie-legend-item';
+                // Apply gradient color
+                const color = getColorForBucket(i);
+                bar.style.background = color;
+                bar.style.borderColor = '#00ff00';
                 
-                const colorBox = document.createElement('div');
-                colorBox.className = 'pie-legend-color';
-                colorBox.style.backgroundColor = color;
+                const barCount = document.createElement('div');
+                barCount.className = 'bar-count-horizontal';
+                barCount.textContent = count;
                 
-                const label = document.createElement('div');
-                label.className = 'pie-legend-label';
-                label.textContent = `${i * 10}-${(i + 1) * 10}%: ${count} sequences`;
-                
-                legendItem.appendChild(colorBox);
-                legendItem.appendChild(label);
-                legend.appendChild(legendItem);
+                bar.appendChild(barCount);
+                barWrapper.appendChild(bar);
+                barRow.appendChild(barLabel);
+                barRow.appendChild(barWrapper);
+                barsContainer.appendChild(barRow);
             });
-            
-            pieContainer.appendChild(legend);
             
             // Create runtime comparison chart
             const avgVecRuntime = totalVecRuntime / data.header.num_sequences;
