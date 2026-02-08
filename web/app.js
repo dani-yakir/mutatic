@@ -197,16 +197,21 @@ class GenomeComparisonApp {
 
     async runComparison() {
         const sequenceId = this.selectedSequence.id;
+        console.log('Starting comparison for sequence:', sequenceId);
 
         // Reset progress bars
         this.resetProgressBars();
 
         try {
             // Run Vector KNN (fast)
+            console.log('Running Vector KNN...');
             const vectorResult = await this.runVectorKNN(sequenceId, this.kValue, true);
+            console.log('Vector KNN completed:', vectorResult);
             
             // Run Needleman-Wunsch (slow, with progress)
+            console.log('Running Needleman-Wunsch...');
             const nwResult = await this.runNeedlemanWunsch(sequenceId, this.kValue, true);
+            console.log('Needleman-Wunsch completed:', nwResult);
 
             // Store results for later display
             this.comparisonResults = { 
@@ -216,6 +221,7 @@ class GenomeComparisonApp {
                 nwTime: nwResult.time
             };
             
+            console.log('Comparison complete, showing view results button');
             // Show "View Results" button instead of auto-transitioning
             this.showViewResultsButton();
         } catch (error) {
@@ -370,21 +376,17 @@ class GenomeComparisonApp {
 
     showViewResultsButton() {
         // Show a button to manually transition to results
-        const comparisonScreen = document.getElementById('comparison-screen');
-        let viewResultsBtn = document.getElementById('view-results-btn');
+        console.log('showViewResultsButton called');
+        const viewResultsBtn = document.getElementById('view-results-btn');
+        console.log('view-results-btn element:', viewResultsBtn);
         
-        if (!viewResultsBtn) {
-            viewResultsBtn = document.createElement('button');
-            viewResultsBtn.id = 'view-results-btn';
-            viewResultsBtn.className = 'view-results-btn';
-            viewResultsBtn.textContent = 'VIEW RESULTS';
-            viewResultsBtn.addEventListener('click', () => {
-                this.showResultsScreen();
-            });
-            comparisonScreen.querySelector('.comparison-container').appendChild(viewResultsBtn);
+        if (viewResultsBtn) {
+            console.log('Removing hidden class from button');
+            viewResultsBtn.classList.remove('hidden');
+            console.log('Button classes after removal:', viewResultsBtn.className);
+        } else {
+            console.error('view-results-btn element not found!');
         }
-        
-        viewResultsBtn.style.display = 'block';
     }
     
     showResultsScreen() {
@@ -400,8 +402,7 @@ class GenomeComparisonApp {
     displayResults(vectorResults, nwResults, vectorTime, nwTime) {
         // Display query sequence
         const querySeq = this.sequenceData.sequences[this.selectedSequence.index];
-        document.getElementById('query-id').textContent = this.selectedSequence.id;
-        document.getElementById('query-sequence-data').textContent = querySeq.sequence;
+        document.getElementById('query-id').textContent = `Query Sequence: ${this.selectedSequence.id}`;
 
         // Display runtimes
         document.getElementById('vector-runtime').textContent = `Runtime: ${Algorithms.formatTime(vectorTime)}`;
@@ -409,17 +410,18 @@ class GenomeComparisonApp {
 
         // Calculate and display agreement
         const agreement = this.calculateAgreement(vectorResults, nwResults);
-        document.getElementById('agreement-percentage').textContent = `${agreement.toFixed(1)}%`;
+        document.getElementById('agreement-percentage').textContent = `Agreement: ${agreement.toFixed(1)}%`;
 
         // Find common results
         const vectorIds = new Set(vectorResults.map(r => r.id));
-        const commonIds = nwResults.filter(r => vectorIds.has(r.id)).map(r => r.id);
+        const nwIds = new Set(nwResults.map(r => r.id));
+        const commonIds = [...vectorIds].filter(id => nwIds.has(id));
 
         // Display vector results
         const vectorContainer = document.getElementById('vector-results');
         vectorContainer.innerHTML = '';
         vectorResults.forEach((result, idx) => {
-            const item = this.createResultItem(result, commonIds.includes(result.id), idx + 1, querySeq.sequence, 'vector');
+            const item = this.createDetailResultItem(result, commonIds.includes(result.id), idx + 1, querySeq, 'vector');
             vectorContainer.appendChild(item);
         });
 
@@ -427,7 +429,7 @@ class GenomeComparisonApp {
         const nwContainer = document.getElementById('nw-results');
         nwContainer.innerHTML = '';
         nwResults.forEach((result, idx) => {
-            const item = this.createResultItem(result, commonIds.includes(result.id), idx + 1, querySeq.sequence, 'nw');
+            const item = this.createDetailResultItem(result, commonIds.includes(result.id), idx + 1, querySeq, 'nw');
             nwContainer.appendChild(item);
         });
     }
@@ -446,43 +448,39 @@ class GenomeComparisonApp {
         return (commonCount / vectorResults.length) * 100;
     }
 
-    createResultItem(result, isCommon, rank, querySequence, algorithmType) {
+    createDetailResultItem(result, isCommon, rank, querySeqData, algorithmType) {
         const item = document.createElement('div');
-        item.className = 'result-item' + (isCommon ? ' common' : '');
+        item.className = 'detail-result-item' + (isCommon ? ' common' : '');
         const similarity = result.similarity || 0;
         
         // Get the compared sequence
         const comparedSeq = this.sequenceData.sequences.find(s => s.id === result.id);
         
-        if (!comparedSeq) {
-            console.error(`Sequence not found for ID: ${result.id}`);
-        }
-        
         // Create unique IDs by prefixing with algorithm type
-        const uniqueQueryId = `${algorithmType}-query-${result.id}`;
-        const uniqueComparedId = `${algorithmType}-compared-${result.id}`;
+        const uniqueQueryId = `${algorithmType}-detail-query-${result.id}`;
+        const uniqueComparedId = `${algorithmType}-detail-compared-${result.id}`;
         
         item.innerHTML = `
-            <div class="result-header">
-                <span class="result-rank">#${rank}</span>
-                <span class="result-id">${result.id}</span>
-                <span class="result-similarity">${similarity.toFixed(4)}</span>
-                <span class="expand-icon">▼</span>
+            <div class="detail-result-header">
+                <span class="detail-result-rank">#${rank}</span>
+                <span class="detail-result-id">${result.id}</span>
+                <span class="detail-result-similarity">${similarity.toFixed(4)}</span>
+                <span class="detail-expand-icon">▼</span>
             </div>
-            <div class="result-details" style="display: none;">
+            <div class="detail-result-details" style="display: none;">
                 <div class="sequence-comparison">
-                    <div class="sequence-label">Query Sequence:</div>
-                    <div class="sequence-display" id="${uniqueQueryId}"></div>
+                    <div class="sequence-label">Query Sequence (${querySeqData.id}):</div>
+                    <div class="sequence-display" id="${uniqueQueryId}">Loading...</div>
                     <div class="sequence-label">Compared Sequence (${result.id}):</div>
-                    <div class="sequence-display" id="${uniqueComparedId}"></div>
+                    <div class="sequence-display" id="${uniqueComparedId}">Loading...</div>
                 </div>
             </div>
         `;
         
         // Add click handler to expand/collapse
-        const header = item.querySelector('.result-header');
-        const details = item.querySelector('.result-details');
-        const icon = item.querySelector('.expand-icon');
+        const header = item.querySelector('.detail-result-header');
+        const details = item.querySelector('.detail-result-details');
+        const icon = item.querySelector('.detail-expand-icon');
         
         header.style.cursor = 'pointer';
         header.addEventListener('click', () => {
@@ -491,15 +489,13 @@ class GenomeComparisonApp {
             if (isExpanded) {
                 details.style.display = 'none';
                 icon.textContent = '▼';
-                item.classList.remove('expanded');
             } else {
                 details.style.display = 'block';
                 icon.textContent = '▲';
-                item.classList.add('expanded');
                 
                 // Perform alignment and display diff
                 if (comparedSeq && comparedSeq.sequence) {
-                    this.displaySequenceDiff(querySequence, comparedSeq.sequence, uniqueQueryId, uniqueComparedId);
+                    this.displaySequenceDiff(querySeqData.sequence, comparedSeq.sequence, uniqueQueryId, uniqueComparedId);
                 } else {
                     console.error(`No sequence data for ${result.id}`);
                     document.getElementById(uniqueQueryId).textContent = 'Sequence data not available';

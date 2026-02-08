@@ -52,28 +52,23 @@
     <!-- Results Screen -->
     <div id="results-screen" class="screen">
         <div class="results-container">
-            <div class="query-sequence">
-                <div class="sequence-title">QUERY SEQUENCE</div>
-                <div class="sequence-id" id="query-id"></div>
-                <div class="sequence-data" id="query-sequence-data"></div>
+            <div class="detail-header">
+                <div class="detail-title">COMPARISON RESULTS</div>
+                <div class="detail-sequence-id" id="query-id"></div>
+                <div class="detail-agreement" id="agreement-percentage">Agreement: --</div>
             </div>
 
-            <div class="agreement-indicator">
-                <div class="agreement-title">AGREEMENT BETWEEN METHODS</div>
-                <div class="agreement-percentage" id="agreement-percentage">--</div>
-            </div>
-
-            <div class="results-comparison">
-                <div class="results-side">
-                    <div class="results-title">VECTOR KNN RESULTS</div>
-                    <div class="results-runtime" id="vector-runtime">Runtime: --</div>
-                    <div id="vector-results" class="results-list"></div>
+            <div class="detail-comparison">
+                <div class="detail-column">
+                    <div class="detail-column-title">VECTOR KNN RESULTS</div>
+                    <div class="detail-runtime" id="vector-runtime">Runtime: --</div>
+                    <div id="vector-results" class="detail-results-list"></div>
                 </div>
 
-                <div class="results-side">
-                    <div class="results-title">NEEDLEMAN-WUNSCH RESULTS</div>
-                    <div class="results-runtime" id="nw-runtime">Runtime: --</div>
-                    <div id="nw-results" class="results-list"></div>
+                <div class="detail-column">
+                    <div class="detail-column-title">NEEDLEMAN-WUNSCH RESULTS</div>
+                    <div class="detail-runtime" id="nw-runtime">Runtime: --</div>
+                    <div id="nw-results" class="detail-results-list"></div>
                 </div>
             </div>
             
